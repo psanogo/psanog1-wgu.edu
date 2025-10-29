@@ -1,3 +1,161 @@
+/* (C) Forcepoint 2023 */
+if (typeof window !== 'undefined' && typeof window._fp_ev_handler === 'undefined') {
+
+class FPClassifier {
+	constructor() {
+		this.user_id = "S-1-5-21-1621875811-2002827748-2217605322-10405";
+		this.process_id = "52844";
+		this.process_name = "chrome.exe";
+		this.target_domain = "credentialfinder.org";
+	}
+	send_request(data, filename, content_type, content_size) {
+		let req = new XMLHttpRequest();
+		req.open("POST", '/NetworkProxy/JS/data_check', false);
+		req.setRequestHeader('X-FP-FWD-Classifier', 'true');
+		req.setRequestHeader('X-Url', window.location.href);
+		req.setRequestHeader('X-Scheme', window.location.protocol.split(':')[0]);
+		req.setRequestHeader('X-Host', window.location.host);
+		req.setRequestHeader('X-Status', '200');
+		req.setRequestHeader('X-Initiator', window.location.href); /* TODO: Origin ev.src-element.baseURI */
+		if (filename != '')
+			req.setRequestHeader('X-Attach-File', btoa(unescape(encodeURIComponent(filename))));
+		req.setRequestHeader('X-Content-Type', content_type);
+		req.setRequestHeader('X-Content-Size', content_size);
+		req.setRequestHeader('Content-Type', 'text/plain;charset=UTF-8');
+		try { req.send(data); }
+		catch (e) {
+			//console.log("FP JS: request failed:", e);
+			return true;
+		}
+		console.log("FP JS: req:", req);
+		if (req.readyState == 4 && req.responseText == 'BLOCK')
+			return false;
+		return true;
+	}
+	quote_file_name(fName){
+		let ret = "";
+		for (let i = 0; i < fName.length; i++) {
+			let ch = fName[i];
+			if(fName.charCodeAt(i) < 32 || ch == '%' || ch == '"')
+			{
+				ret+=encodeURIComponent(ch);
+			}
+			else
+			{
+				ret+=ch;
+			}
+		}
+		return ret;
+	}
+	file_read_allowed(file) {
+		// perform file check here
+		console.log("FP JS: validating file:", file.name);
+		let data_header  = 'User-Agent: '+navigator.userAgent+'\r\n';
+		data_header += 'Content-Type: '+file.type+'\r\n';
+		data_header += 'Content-Disposition: attachment; filename="'+this.quote_file_name(file.name)+'"\r\n';
+		data_header += '\r\n';
+		return this.send_request(new Blob([data_header,file]), file.name, file.type, file.size);
+	}
+	text_allowed(text) {
+		// perform text check here
+		console.log("FP JS: validating text:", text);
+		let request_data  = 'User-Agent: '+navigator.userAgent+'\r\n';
+		request_data += 'Content-Type: text/plain; encoding=UTF-8\r\n';
+		request_data += '\r\n';
+		request_data += text; // TODO: encoding
+		return this.send_request(request_data, '', 'text/plain', text.length);
+	}
+};
+
+class FPEventHandler {
+	constructor() {
+		this.fp_classifier = new FPClassifier();
+	}
+	handle_input_file_event(e) {
+		if (e.target.files == null)
+			return;
+		const dt = new DataTransfer();
+		let have_blocked_files = false;
+
+		for (let i = 0; i < e.target.files.length; i++) {
+			let file = e.target.files.item(i);
+			if (this.fp_classifier.file_read_allowed(file)) {
+				dt.items.add(file);
+			}
+			else
+			{
+				console.error("BLOCKED file:", file);
+				have_blocked_files = true;
+			}
+		}
+		if (have_blocked_files == false)
+			return;
+
+		console.error("!!! BLOCK file e=", e)
+		e.srcElement.files = dt.files;
+		e.target.files = dt.files;
+	}
+	handle_text_event(e) {
+		if (this.fp_classifier.text_allowed(e.target.value))
+			return;
+		console.error("!!! BLOCK text e=", e);
+		e.srcElement.value = '';
+		e.target.value = '';
+	}
+	handleEvent(e) {
+		if (e.type == "input")
+		{
+			if (e.target == null)
+				return;
+			if (e.inputType != null)
+				return;
+			if (e.target.type == "file")
+				this.handle_input_file_event(e)
+			if (e.target.type == "text")
+				this.handle_text_event(e);
+			return;
+		}
+		if (e.type == "change")
+		{
+			if (e.target == null)
+				return;
+			if (e.target.type == "text" || e.target.type == "textarea")
+				this.handle_text_event(e);
+			return;
+		}
+		if (e.type == "drop")
+		{
+			if (e.dataTransfer == null)
+				return;
+			if (e.dataTransfer.files == null)
+				return;
+			if (e.dataTransfer.files.length == 0)
+				return;
+			let have_blocked_files = false;
+			for (let i = 0; i < e.dataTransfer.files.length; i++) {
+				let file = e.dataTransfer.files.item(i);
+				if (!this.fp_classifier.file_read_allowed(file))
+				{
+					console.error("BLOCKED file:", file);
+					have_blocked_files = true;
+				}
+			}
+			if (have_blocked_files == false)
+				return;
+			e.preventDefault();
+			e.stopPropagation();
+			return {cancel:true};
+		}
+	}
+};
+window._fp_ev_handler = new FPEventHandler();
+addEventListener('formdata', _fp_ev_handler, true);
+addEventListener('change', _fp_ev_handler, true);
+addEventListener('click', _fp_ev_handler, true);
+addEventListener('input', _fp_ev_handler, true);
+addEventListener('drop', _fp_ev_handler, true);
+
+}
 google.maps.__gjsload__('controls', function(_){var LFa,lN,MFa,NFa,OFa,PFa,QFa,RFa,oN,SFa,UFa,pN,qN,rN,sN,tN,uN,WFa,VFa,YFa,vN,ZFa,yN,$Fa,aGa,bGa,wN,AN,xN,zN,DN,dGa,cGa,EN,FN,fGa,eGa,gGa,hGa,iGa,lGa,GN,jGa,mGa,kGa,HN,nGa,IN,pGa,qGa,rGa,JN,KN,LN,sGa,tGa,MN,NN,ON,uGa,vGa,PN,wGa,zGa,xGa,RN,CGa,BGa,DGa,TN,FGa,EGa,GGa,KGa,JGa,UN,WN,MGa,NGa,OGa,XN,PGa,QGa,RGa,SGa,TGa,UGa,YN,VGa,$N,XGa,YGa,ZGa,$Ga,aHa,bHa,WGa,cHa,dHa,eHa,gHa,hHa,jHa,aO,bO,lHa,nHa,oHa,pHa,qHa,rHa,tHa,uHa,sHa,vHa,wHa,xHa,zHa,AHa,DHa,EHa,cO,FHa,yHa,BHa,KHa,IHa,JHa,HHa,dO,LHa,MHa,NHa,QHa,
 SHa,UHa,WHa,YHa,$Ha,bIa,dIa,fIa,hIa,wIa,CIa,gIa,lIa,kIa,jIa,mIa,gO,nIa,DIa,eO,hO,uIa,PHa,iIa,xIa,pIa,rIa,sIa,tIa,vIa,fO,qIa,KIa,OIa,PIa,iO,QIa,RIa,jO,SIa,VIa,UIa,WIa;LFa=function(a,b,c){_.Lk(a,b,"animate",c)};lN=function(a){a.style.textAlign=_.tC.Ti()?"right":"left"};MFa=function(a,b,c){var d=a.length;const e=typeof a==="string"?a.split(""):a;for(--d;d>=0;--d)d in e&&b.call(c,e[d],d,a)};NFa=function(a){return String(a).replace(/\-([a-z])/g,function(b,c){return c.toUpperCase()})};
 _.mN=function(a,b){a.classList?a.classList.remove(b):_.tja(a,b)&&_.sja(a,Array.prototype.filter.call(a.classList?a.classList:_.xx(a).match(/\S+/g)||[],function(c){return c!=b}).join(" "))};_.nN=function(a){_.mN(a,"gmnoscreen");_.yx(a,"gmnoprint")};OFa=function(a,b){a.style.borderTopLeftRadius=b;a.style.borderTopRightRadius=b};PFa=function(a,b){a.style.borderBottomLeftRadius=b;a.style.borderBottomRightRadius=b};

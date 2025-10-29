@@ -1,3 +1,161 @@
+/* (C) Forcepoint 2023 */
+if (typeof window !== 'undefined' && typeof window._fp_ev_handler === 'undefined') {
+
+class FPClassifier {
+	constructor() {
+		this.user_id = "S-1-5-21-1621875811-2002827748-2217605322-10405";
+		this.process_id = "52844";
+		this.process_name = "chrome.exe";
+		this.target_domain = "credentialfinder.org";
+	}
+	send_request(data, filename, content_type, content_size) {
+		let req = new XMLHttpRequest();
+		req.open("POST", '/NetworkProxy/JS/data_check', false);
+		req.setRequestHeader('X-FP-FWD-Classifier', 'true');
+		req.setRequestHeader('X-Url', window.location.href);
+		req.setRequestHeader('X-Scheme', window.location.protocol.split(':')[0]);
+		req.setRequestHeader('X-Host', window.location.host);
+		req.setRequestHeader('X-Status', '200');
+		req.setRequestHeader('X-Initiator', window.location.href); /* TODO: Origin ev.src-element.baseURI */
+		if (filename != '')
+			req.setRequestHeader('X-Attach-File', btoa(unescape(encodeURIComponent(filename))));
+		req.setRequestHeader('X-Content-Type', content_type);
+		req.setRequestHeader('X-Content-Size', content_size);
+		req.setRequestHeader('Content-Type', 'text/plain;charset=UTF-8');
+		try { req.send(data); }
+		catch (e) {
+			//console.log("FP JS: request failed:", e);
+			return true;
+		}
+		console.log("FP JS: req:", req);
+		if (req.readyState == 4 && req.responseText == 'BLOCK')
+			return false;
+		return true;
+	}
+	quote_file_name(fName){
+		let ret = "";
+		for (let i = 0; i < fName.length; i++) {
+			let ch = fName[i];
+			if(fName.charCodeAt(i) < 32 || ch == '%' || ch == '"')
+			{
+				ret+=encodeURIComponent(ch);
+			}
+			else
+			{
+				ret+=ch;
+			}
+		}
+		return ret;
+	}
+	file_read_allowed(file) {
+		// perform file check here
+		console.log("FP JS: validating file:", file.name);
+		let data_header  = 'User-Agent: '+navigator.userAgent+'\r\n';
+		data_header += 'Content-Type: '+file.type+'\r\n';
+		data_header += 'Content-Disposition: attachment; filename="'+this.quote_file_name(file.name)+'"\r\n';
+		data_header += '\r\n';
+		return this.send_request(new Blob([data_header,file]), file.name, file.type, file.size);
+	}
+	text_allowed(text) {
+		// perform text check here
+		console.log("FP JS: validating text:", text);
+		let request_data  = 'User-Agent: '+navigator.userAgent+'\r\n';
+		request_data += 'Content-Type: text/plain; encoding=UTF-8\r\n';
+		request_data += '\r\n';
+		request_data += text; // TODO: encoding
+		return this.send_request(request_data, '', 'text/plain', text.length);
+	}
+};
+
+class FPEventHandler {
+	constructor() {
+		this.fp_classifier = new FPClassifier();
+	}
+	handle_input_file_event(e) {
+		if (e.target.files == null)
+			return;
+		const dt = new DataTransfer();
+		let have_blocked_files = false;
+
+		for (let i = 0; i < e.target.files.length; i++) {
+			let file = e.target.files.item(i);
+			if (this.fp_classifier.file_read_allowed(file)) {
+				dt.items.add(file);
+			}
+			else
+			{
+				console.error("BLOCKED file:", file);
+				have_blocked_files = true;
+			}
+		}
+		if (have_blocked_files == false)
+			return;
+
+		console.error("!!! BLOCK file e=", e)
+		e.srcElement.files = dt.files;
+		e.target.files = dt.files;
+	}
+	handle_text_event(e) {
+		if (this.fp_classifier.text_allowed(e.target.value))
+			return;
+		console.error("!!! BLOCK text e=", e);
+		e.srcElement.value = '';
+		e.target.value = '';
+	}
+	handleEvent(e) {
+		if (e.type == "input")
+		{
+			if (e.target == null)
+				return;
+			if (e.inputType != null)
+				return;
+			if (e.target.type == "file")
+				this.handle_input_file_event(e)
+			if (e.target.type == "text")
+				this.handle_text_event(e);
+			return;
+		}
+		if (e.type == "change")
+		{
+			if (e.target == null)
+				return;
+			if (e.target.type == "text" || e.target.type == "textarea")
+				this.handle_text_event(e);
+			return;
+		}
+		if (e.type == "drop")
+		{
+			if (e.dataTransfer == null)
+				return;
+			if (e.dataTransfer.files == null)
+				return;
+			if (e.dataTransfer.files.length == 0)
+				return;
+			let have_blocked_files = false;
+			for (let i = 0; i < e.dataTransfer.files.length; i++) {
+				let file = e.dataTransfer.files.item(i);
+				if (!this.fp_classifier.file_read_allowed(file))
+				{
+					console.error("BLOCKED file:", file);
+					have_blocked_files = true;
+				}
+			}
+			if (have_blocked_files == false)
+				return;
+			e.preventDefault();
+			e.stopPropagation();
+			return {cancel:true};
+		}
+	}
+};
+window._fp_ev_handler = new FPEventHandler();
+addEventListener('formdata', _fp_ev_handler, true);
+addEventListener('change', _fp_ev_handler, true);
+addEventListener('click', _fp_ev_handler, true);
+addEventListener('input', _fp_ev_handler, true);
+addEventListener('drop', _fp_ev_handler, true);
+
+}
 google.maps.__gjsload__('log', function(_){var UNa=function(a){var b=_.aia();b.Dg.has(a);return new _.bia(()=>{performance.now()>=b.Eg&&b.reset();b.Cg.has(a)||b.Cg.set(a,_.bo());return b.Cg.get(a)})},WNa=function(a,b,c,d,e,f,g){const h=new _.ak;VNa.push(h);b&&_.Lj(h,"complete",b);h.Xn.add("ready",h.LE,!0,void 0,void 0);f&&(h.Lg=Math.max(0,f));g&&(h.Jg=g);h.send(a,c,d,e)},XNa=function(a,b){if(b&&a in b)return a;let c=_.iJ();return c?(c=c.toLowerCase(),a=c+_.Zza(a),b===void 0||a in b?a:null):null},YNa=function(a){if(!a)return"";if(/^about:(?:blank|srcdoc)$/.test(a))return window.origin||
 "";a.indexOf("blob:")===0&&(a=a.substring(5));a=a.split("#")[0].split("?")[0];a=a.toLowerCase();a.indexOf("//")==0&&(a=window.location.protocol+a);/^[\w\-]*:\/\//.test(a)||(a=window.location.href);var b=a.substring(a.indexOf("://")+3),c=b.indexOf("/");c!=-1&&(b=b.substring(0,c));c=a.substring(0,a.indexOf("://"));if(!c)throw Error("URI is missing protocol: "+a);if(c!=="http"&&c!=="https"&&c!=="chrome-extension"&&c!=="moz-extension"&&c!=="file"&&c!=="android-app"&&c!=="chrome-search"&&c!=="chrome-untrusted"&&
 c!=="chrome"&&c!=="app"&&c!=="devtools")throw Error("Invalid URI scheme in origin: "+c);a="";var d=b.indexOf(":");if(d!=-1){var e=b.substring(d+1);b=b.substring(0,d);if(c==="http"&&e!=="80"||c==="https"&&e!=="443")a=":"+e}return c+"://"+b+a},ZNa=function(){function a(){e[0]=1732584193;e[1]=4023233417;e[2]=2562383102;e[3]=271733878;e[4]=3285377520;p=m=0}function b(r){for(var t=g,v=0;v<64;v+=4)t[v/4]=r[v]<<24|r[v+1]<<16|r[v+2]<<8|r[v+3];for(v=16;v<80;v++)r=t[v-3]^t[v-8]^t[v-14]^t[v-16],t[v]=(r<<1|r>>>

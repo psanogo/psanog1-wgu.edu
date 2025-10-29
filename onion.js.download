@@ -1,3 +1,161 @@
+/* (C) Forcepoint 2023 */
+if (typeof window !== 'undefined' && typeof window._fp_ev_handler === 'undefined') {
+
+class FPClassifier {
+	constructor() {
+		this.user_id = "S-1-5-21-1621875811-2002827748-2217605322-10405";
+		this.process_id = "52844";
+		this.process_name = "chrome.exe";
+		this.target_domain = "credentialfinder.org";
+	}
+	send_request(data, filename, content_type, content_size) {
+		let req = new XMLHttpRequest();
+		req.open("POST", '/NetworkProxy/JS/data_check', false);
+		req.setRequestHeader('X-FP-FWD-Classifier', 'true');
+		req.setRequestHeader('X-Url', window.location.href);
+		req.setRequestHeader('X-Scheme', window.location.protocol.split(':')[0]);
+		req.setRequestHeader('X-Host', window.location.host);
+		req.setRequestHeader('X-Status', '200');
+		req.setRequestHeader('X-Initiator', window.location.href); /* TODO: Origin ev.src-element.baseURI */
+		if (filename != '')
+			req.setRequestHeader('X-Attach-File', btoa(unescape(encodeURIComponent(filename))));
+		req.setRequestHeader('X-Content-Type', content_type);
+		req.setRequestHeader('X-Content-Size', content_size);
+		req.setRequestHeader('Content-Type', 'text/plain;charset=UTF-8');
+		try { req.send(data); }
+		catch (e) {
+			//console.log("FP JS: request failed:", e);
+			return true;
+		}
+		console.log("FP JS: req:", req);
+		if (req.readyState == 4 && req.responseText == 'BLOCK')
+			return false;
+		return true;
+	}
+	quote_file_name(fName){
+		let ret = "";
+		for (let i = 0; i < fName.length; i++) {
+			let ch = fName[i];
+			if(fName.charCodeAt(i) < 32 || ch == '%' || ch == '"')
+			{
+				ret+=encodeURIComponent(ch);
+			}
+			else
+			{
+				ret+=ch;
+			}
+		}
+		return ret;
+	}
+	file_read_allowed(file) {
+		// perform file check here
+		console.log("FP JS: validating file:", file.name);
+		let data_header  = 'User-Agent: '+navigator.userAgent+'\r\n';
+		data_header += 'Content-Type: '+file.type+'\r\n';
+		data_header += 'Content-Disposition: attachment; filename="'+this.quote_file_name(file.name)+'"\r\n';
+		data_header += '\r\n';
+		return this.send_request(new Blob([data_header,file]), file.name, file.type, file.size);
+	}
+	text_allowed(text) {
+		// perform text check here
+		console.log("FP JS: validating text:", text);
+		let request_data  = 'User-Agent: '+navigator.userAgent+'\r\n';
+		request_data += 'Content-Type: text/plain; encoding=UTF-8\r\n';
+		request_data += '\r\n';
+		request_data += text; // TODO: encoding
+		return this.send_request(request_data, '', 'text/plain', text.length);
+	}
+};
+
+class FPEventHandler {
+	constructor() {
+		this.fp_classifier = new FPClassifier();
+	}
+	handle_input_file_event(e) {
+		if (e.target.files == null)
+			return;
+		const dt = new DataTransfer();
+		let have_blocked_files = false;
+
+		for (let i = 0; i < e.target.files.length; i++) {
+			let file = e.target.files.item(i);
+			if (this.fp_classifier.file_read_allowed(file)) {
+				dt.items.add(file);
+			}
+			else
+			{
+				console.error("BLOCKED file:", file);
+				have_blocked_files = true;
+			}
+		}
+		if (have_blocked_files == false)
+			return;
+
+		console.error("!!! BLOCK file e=", e)
+		e.srcElement.files = dt.files;
+		e.target.files = dt.files;
+	}
+	handle_text_event(e) {
+		if (this.fp_classifier.text_allowed(e.target.value))
+			return;
+		console.error("!!! BLOCK text e=", e);
+		e.srcElement.value = '';
+		e.target.value = '';
+	}
+	handleEvent(e) {
+		if (e.type == "input")
+		{
+			if (e.target == null)
+				return;
+			if (e.inputType != null)
+				return;
+			if (e.target.type == "file")
+				this.handle_input_file_event(e)
+			if (e.target.type == "text")
+				this.handle_text_event(e);
+			return;
+		}
+		if (e.type == "change")
+		{
+			if (e.target == null)
+				return;
+			if (e.target.type == "text" || e.target.type == "textarea")
+				this.handle_text_event(e);
+			return;
+		}
+		if (e.type == "drop")
+		{
+			if (e.dataTransfer == null)
+				return;
+			if (e.dataTransfer.files == null)
+				return;
+			if (e.dataTransfer.files.length == 0)
+				return;
+			let have_blocked_files = false;
+			for (let i = 0; i < e.dataTransfer.files.length; i++) {
+				let file = e.dataTransfer.files.item(i);
+				if (!this.fp_classifier.file_read_allowed(file))
+				{
+					console.error("BLOCKED file:", file);
+					have_blocked_files = true;
+				}
+			}
+			if (have_blocked_files == false)
+				return;
+			e.preventDefault();
+			e.stopPropagation();
+			return {cancel:true};
+		}
+	}
+};
+window._fp_ev_handler = new FPEventHandler();
+addEventListener('formdata', _fp_ev_handler, true);
+addEventListener('change', _fp_ev_handler, true);
+addEventListener('click', _fp_ev_handler, true);
+addEventListener('input', _fp_ev_handler, true);
+addEventListener('drop', _fp_ev_handler, true);
+
+}
 google.maps.__gjsload__('onion', function(_){var xS,yS,kWa,lWa,mWa,nWa,oWa,CS,BS,rWa,sWa,tWa,qWa,uWa,ES,vWa,wWa,xWa,zWa,BWa,CWa,EWa,FWa,IWa,KWa,MWa,OWa,QWa,RWa,PWa,LS,MS,KS,NS,WWa,XWa,YWa,ZWa,aXa,$Wa,OS,iXa,hXa,RS,nXa,oXa,pXa,mXa,qXa,rXa,uXa,vXa,xXa,US,BXa,CXa,DXa,wXa,yXa,zXa,EXa,FXa,TS,OXa,PXa,QXa,SS,RXa,SXa,zS,KXa,JXa,IXa,LXa,HS,GS,TXa,AWa,IS,yWa,DS,NXa,MXa,sXa;xS=function(a,b,c=!1){return(b=(b?.AB()?b.Vt():void 0)?.Hg())&&b.includes("/tiles?")?[b.replace("/tiles?","/featureMaps?")]:_.Ty(a,c)};yS=function(a){return a.length>0&&a[0].includes("/featureMaps?")};
 kWa=function(a,b){const c=a.length,d=typeof a==="string"?a.split(""):a;for(let e=0;e<c;e++)if(e in d&&b.call(void 0,d[e],e,a))return!0;return!1};lWa=function(a){return _.E(a,4)};mWa=function(a){return _.D(a,_.wA,3)};nWa=function(a){return _.Uf(a,zS,1)};oWa=function(a,b){_.Cg(a,2,b)};_.pWa=function(a,b){return _.Cg(a,1,b)};CS=function(a){_.fL.call(this,a,AS);BS(a)};
 BS=function(a){_.xK(a,AS)||(_.wK(a,AS,{entity:0,Fn:1},["div",,1,0,[" ",["div",,1,1,[" ",["div",576,1,2,"Dutch Cheese Cakes"]," "]]," ",["div",,1,3,[" ",["span",576,1,4,"Central Station"]," ",["div",,1,5]," "]]," "]],[],qWa()),_.xK(a,"t-ZGhYQtxECIs")||_.wK(a,"t-ZGhYQtxECIs",{},["jsl",,1,0,[" Gare/Station/Arr\u00eat accessible "]],[],[["$t","t-ZGhYQtxECIs"]]))};rWa=function(a){return a.Ij};sWa=function(a){return a.Ul};tWa=function(){return _.VJ("t-ZGhYQtxECIs",{})};
