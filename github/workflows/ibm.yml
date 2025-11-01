@@ -1,2 +1,2 @@
 env:
-  IBM_CLOUD_API_KEY: ${{ secrets.eyJhbGciOiJIUz......sgrKIi8hdFs }}
+  IBM_CLOUD_API_KEY: ${{ secrets.51e4eb72ff8b0b76d2d148d80322967dcee6a404 }}
